@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "eshop.fullname" . }}-productservice-config
+data:
+  DB_CONNECTION: mysql
+  DB_HOST: {{ .Values.productservice.database.host }}
+  DB_PORT: "3306"
+  DB_DATABASE: {{ .Values.productservice.database.name }}
+  DB_USERNAME: {{ .Values.productservice.database.username }}
+  DB_PASSWORD: {{ .Values.productservice.database.password }}
+  APP_ENV: production
+  APP_KEY: {{ .Values.productservice.appKey }}

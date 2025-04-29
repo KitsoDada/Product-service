@@ -1,0 +1,3 @@
+$this->call([
+    ProductsTableSeeder::class
+]);
