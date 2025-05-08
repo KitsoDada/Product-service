@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: productservice-config
+data:
+  APP_ENV: "production"
+  LOG_CHANNEL: "stack"
+  # Add more PHP/Laravel-specific environment variables here if needed
