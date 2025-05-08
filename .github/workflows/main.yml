@@ -2,7 +2,7 @@ name: ProductService CI/CD
 
 on:
   push:
-    branches: [ "main" ]  # Changed from "master" to match your repo
+    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
@@ -32,7 +32,7 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
 
-    - name: Get ACR credentials dynamically
+    - name: Get ACR credentials
       run: |
         ACR_USERNAME=$(az acr credential show --name ${{ env.AZURE_CONTAINER_REGISTRY }} --query "username" -o tsv)
         ACR_PASSWORD=$(az acr credential show --name ${{ env.AZURE_CONTAINER_REGISTRY }} --query "passwords[0].value" -o tsv)
@@ -49,39 +49,29 @@ jobs:
     - name: Build and push Docker image
       uses: docker/build-push-action@v4
       with:
-        context: .  # Changed to root directory
-        file: ./Dockerfile  # Correct path to Dockerfile
+        context: .
+        file: ./Dockerfile
         push: true
         tags: |
           ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.APP_NAME }}:latest
           ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.APP_NAME }}:${{ env.IMAGE_TAG }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
 
-    - name: Get AKS cluster name
-      id: get-aks
+    - name: Find AKS cluster
       run: |
-        AKS_NAME=$(az aks list --resource-group ${{ env.RESOURCE_GROUP }} --query "[?contains(name, 'onlinecorner')].name" -o tsv)
+        echo "Available AKS clusters:"
+        az aks list -o table
+        
+        echo "Trying to find cluster in ${{ env.RESOURCE_GROUP }}..."
+        AKS_NAME=$(az aks list --resource-group ${{ env.RESOURCE_GROUP }} --query "[0].name" -o tsv)
+        
         if [ -z "$AKS_NAME" ]; then
-          echo "AKS cluster not found."
+          echo "::error::No AKS cluster found in resource group"
           exit 1
         fi
+        echo "Using cluster: $AKS_NAME"
         echo "AKS_NAME=$AKS_NAME" >> $GITHUB_ENV
 
-    - name: Connect to AKS cluster
+    - name: Deploy to AKS
       run: |
-        az aks get-credentials --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.AKS_NAME }} --overwrite-existing
-
-    - name: Deploy or update ProductService
-      run: |
-        DEPLOYMENT_NAME="${{ env.APP_NAME }}"
-        NAMESPACE="default"
-
-        if kubectl get deployment "$DEPLOYMENT_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
-          echo "Deployment exists. Restarting rollout..."
-          kubectl set image deployment/"$DEPLOYMENT_NAME" "$DEPLOYMENT_NAME"=${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.APP_NAME }}:${{ env.IMAGE_TAG }} -n "$NAMESPACE"
-          kubectl rollout status deployment/"$DEPLOYMENT_NAME" -n "$NAMESPACE"
-        else
-          echo "Deployment does not exist. Applying manifests..."
-          kubectl apply -f ./manifest -n "$NAMESPACE"
-        fi
+        az aks get-credentials --resource-group ${{ env.RESOURCE_GROUP }} --name ${{ env.AKS_NAME }} --admin
+        kubectl apply -f ./manifest
