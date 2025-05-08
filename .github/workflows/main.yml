@@ -2,7 +2,7 @@ name: ProductService CI/CD
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main" ]  # Changed from "master" to match your repo
   pull_request:
     branches: [ "main" ]
 
@@ -49,12 +49,14 @@ jobs:
     - name: Build and push Docker image
       uses: docker/build-push-action@v4
       with:
-        context: ./ProductService   # Change this if your Dockerfile lives elsewhere
-        file: ./ProductService/Dockerfile
+        context: .  # Changed to root directory
+        file: ./Dockerfile  # Correct path to Dockerfile
         push: true
         tags: |
           ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.APP_NAME }}:latest
           ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.APP_NAME }}:${{ env.IMAGE_TAG }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
     - name: Get AKS cluster name
       id: get-aks
@@ -78,6 +80,7 @@ jobs:
         if kubectl get deployment "$DEPLOYMENT_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
           echo "Deployment exists. Restarting rollout..."
           kubectl set image deployment/"$DEPLOYMENT_NAME" "$DEPLOYMENT_NAME"=${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.APP_NAME }}:${{ env.IMAGE_TAG }} -n "$NAMESPACE"
+          kubectl rollout status deployment/"$DEPLOYMENT_NAME" -n "$NAMESPACE"
         else
           echo "Deployment does not exist. Applying manifests..."
           kubectl apply -f ./manifest -n "$NAMESPACE"
